@@ -36,6 +36,60 @@ function brushedImpact(at,duration,level=.22,frequency=800){
  source.connect(filter);filter.connect(gain);gain.connect(masterGain);gain.connect(roomBus());source.start(start);source.stop(start+duration+.02);
  source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect()};
 }
+// Neon arcade UI: rounded synth plucks, a subtle detuned layer and short echoes.
+// Keep cues brief so rapid button presses never turn into a wall of sound.
+let lastUiCue=-Infinity;
+function neonNote(freq,at=0,duration=.16,level=.25){
+ const start=audioContext.currentTime+at;
+ [[0,'triangle',1],[7,'sawtooth',.12]].forEach(([detune,type,weight])=>{
+ const oscillator=audioContext.createOscillator(),filter=audioContext.createBiquadFilter(),gain=audioContext.createGain();
+ oscillator.type=type;oscillator.frequency.value=freq*Math.pow(2,detune/1200);
+ filter.type='lowpass';filter.frequency.setValueAtTime(Math.min(freq*5,6000),start);filter.frequency.exponentialRampToValueAtTime(Math.max(350,freq*1.2),start+duration);
+ gain.gain.setValueAtTime(.0001,start);gain.gain.exponentialRampToValueAtTime(level*weight,start+.005);gain.gain.exponentialRampToValueAtTime(.0001,start+duration);
+ oscillator.connect(filter);filter.connect(gain);gain.connect(masterGain);gain.connect(roomBus());oscillator.start(start);oscillator.stop(start+duration+.02);
+ oscillator.onended=()=>{oscillator.disconnect();filter.disconnect();gain.disconnect()};
+ });
+}
+function arcadeCue(kind){
+ unlockAudio();if(!soundsEnabled||!audioContext||audioContext.state!=='running')return;
+ const now=audioContext.currentTime;if(now-lastUiCue<.035)return;lastUiCue=now;
+ const patterns={
+ tap:[784],add:[659,988,1319],remove:[660,440],up:[880,1175],down:[784,587],
+ choose:[784,988],open:[523,784],close:[784,523],toggle:[740,988],
+ start:[523,659,784,1047],download:[784,988,1175],undo:[988,784,659],
+ pass:[659,523],draw:[587,880],error:[294,277],seat:[698,880]
+ };
+ const notes=patterns[kind]||patterns.tap;
+ notes.forEach((f,i)=>neonNote(f,i*.052,kind==='start'?.23:.14,kind==='tap'?.18:.25));
+ if(['add','start','download'].includes(kind))neonNote(notes.at(-1),notes.length*.052+.055,.17,.065);
+}
+// One delegated listener covers dynamic buttons and keyboard activation too.
+// Internal .click() forwarding is ignored so one press has one UI cue.
+document.addEventListener('click',event=>{
+ if(!event.isTrusted)return;
+ const button=event.target.closest('button');if(!button||button.disabled||button.getAttribute('aria-disabled')==='true')return;
+ const id=button.id;
+ if(['sound-toggle','welcome-sound','add-player'].includes(id))return;
+ let cue='tap';
+ if(button.hasAttribute('data-remove-player'))cue='remove';
+ else if(button.hasAttribute('data-seat'))cue='seat';
+ else if(button.hasAttribute('data-fraction')||button.hasAttribute('data-quick-bet')||button.hasAttribute('data-detail-tab'))cue='choose';
+ else if(button.hasAttribute('data-resume')||['welcome-resume','welcome-new','reset'].includes(id)||(button.type==='submit'&&button.form))cue='start';
+ else if(['show-balances','show-history','digital-rules-button'].includes(id))cue='open';
+ else if(['close-details','game-menu','setup-menu'].includes(id))cue='close';
+ else if(['direction','motion-toggle','match-double'].includes(id))cue='toggle';
+ else if(id==='bet-up')cue='up';else if(id==='bet-down')cue='down';
+ else if(id==='export')cue='download';else if(id==='undo')cue='undo';
+ else if(['digital-pass','table-pass'].includes(id))cue='pass';
+ else if(id==='digital-primary')cue='draw';
+ arcadeCue(cue);
+},true);
+document.addEventListener('change',event=>{
+ if(event.isTrusted&&event.target.matches('select,input[type="radio"]'))arcadeCue('choose');
+});
+document.addEventListener('keydown',event=>{
+ if(event.target.id==='table-bet'&&['ArrowUp','ArrowDown'].includes(event.key))arcadeCue(event.key==='ArrowUp'?'up':'down');
+});
 function sound(kind){
  unlockAudio();if(!soundsEnabled||!audioContext||audioContext.state!=='running')return;
  if(kind==='win'||kind==='full'){
@@ -51,14 +105,14 @@ function sound(kind){
  (match?[349.23,311.13,233.08]:[311.13,233.08]).forEach((f,i)=>mallet(f,.035+i*.14,full?.8:.45,.19));
  if(full){brushedImpact(.23,.55,.22,550);mallet(155.56,.43,.9,.23);tone(77.78,.3,.85,.18)}
  }else if(kind==='ante'){[440,660,880].forEach((f,i)=>mallet(f,i*.055,.25,.12))}
- else{tone(700,0,.065,.12,'sine',480)}
+ else{arcadeCue(kind==='tap'?'tap':kind==='pass'?'pass':'choose')}
 }
 document.addEventListener('pointerdown',unlockAudio,{passive:true});document.addEventListener('keydown',unlockAudio);
-document.getElementById('sound-toggle').onclick=()=>{soundsEnabled=!soundsEnabled;try{localStorage.setItem('inbetween-sound',soundsEnabled?'on':'off')}catch{}if(masterGain&&audioContext)masterGain.gain.setTargetAtTime(soundsEnabled?.18:0,audioContext.currentTime,.02);updateSoundButton();if(soundsEnabled)sound('tap')};
-document.getElementById('direction').onclick=()=>{if(!state||state.ended)return;state.direction*=-1;save();render();sound('tap');$('seating-status').textContent='Direction changed. '+state.players[state.turn]+' keeps the current turn.'};
-function moveSeat(player,target){const from=state.seatOrder.indexOf(player);if(from===target)return;state.seatOrder.splice(from,1);state.seatOrder.splice(target,0,player);save();render();sound('tap');$('seating-status').textContent=state.players[player]+' moved to seat '+(target+1)+'. Turn order now follows the new seating.'}
+document.getElementById('sound-toggle').onclick=()=>{soundsEnabled=!soundsEnabled;try{localStorage.setItem('inbetween-sound',soundsEnabled?'on':'off')}catch{}if(masterGain&&audioContext)masterGain.gain.setTargetAtTime(soundsEnabled?.18:0,audioContext.currentTime,.02);updateSoundButton();if(soundsEnabled)arcadeCue('toggle')};
+document.getElementById('direction').onclick=()=>{if(!state||state.ended)return;state.direction*=-1;save();render();$('seating-status').textContent='Direction changed. '+state.players[state.turn]+' keeps the current turn.'};
+function moveSeat(player,target){const from=state.seatOrder.indexOf(player);if(from===target)return;state.seatOrder.splice(from,1);state.seatOrder.splice(target,0,player);save();render();arcadeCue('seat');$('seating-status').textContent=state.players[player]+' moved to seat '+(target+1)+'. Turn order now follows the new seating.'}
 function bindSeats(){document.querySelectorAll('[data-seat]').forEach(b=>{const player=Number(b.dataset.seat);let drag=null,suppressClick=false;
- b.onclick=()=>{if(suppressClick){suppressClick=false;return}if(state.ended)return;if(state.mode==='digital'){$('seating-status').textContent='The next turn starts automatically after this hand. Dragging still changes seat order.';return}state.turn=player;save();render();sound('tap')};
+ b.onclick=()=>{if(suppressClick){suppressClick=false;return}if(state.ended)return;if(state.mode==='digital'){$('seating-status').textContent='The next turn starts automatically after this hand. Dragging still changes seat order.';return}state.turn=player;save();render()};
  b.onkeydown=e=>{if(e.altKey&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){e.preventDefault();moveSeat(player,(state.seatOrder.indexOf(player)+(e.key==='ArrowRight'?1:-1)+state.players.length)%state.players.length);document.querySelector('[data-seat="'+player+'"]').focus()}};
  b.onpointerdown=e=>{if(state.ended||e.button!==0)return;drag={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false,target:state.seatOrder.indexOf(player)};b.setPointerCapture(e.pointerId)};
  b.onpointermove=e=>{if(!drag||drag.id!==e.pointerId)return;if(Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<7&&!drag.moved)return;drag.moved=true;const r=$('table-scene').getBoundingClientRect(),nx=(e.clientX-r.left-r.width/2)/(r.width*.36),ny=(e.clientY-r.top-r.height/2)/(r.height*(state.mode==='digital'?.40:.30)),angle=(Math.atan2(ny,nx)+Math.PI/2+Math.PI*2)%(Math.PI*2);drag.target=Math.round(angle/(Math.PI*2)*state.players.length)%state.players.length;b.classList.add('dragging');b.style.left=Math.max(4,Math.min(96,(e.clientX-r.left)/r.width*100))+'%';b.style.top=Math.max(4,Math.min(96,(e.clientY-r.top)/r.height*100))+'%';document.querySelectorAll('[data-seat]').forEach(s=>s.classList.toggle('drop-target',state.seatOrder.indexOf(Number(s.dataset.seat))===drag.target&&s!==b));};

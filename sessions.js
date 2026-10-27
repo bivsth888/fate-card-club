@@ -21,7 +21,7 @@ function renderWelcome(){
  $('session-list').innerHTML=sessions.map(s=>{const pot=totals(s).pot,amount=new Intl.NumberFormat('en-US',{style:'currency',currency:s.currency}).format(pot/100),date=new Date(s.updatedAt).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});return `<div class="saved-session"><div class="session-icon">♠</div><div class="session-description"><b>${esc(s.name||'Card night')}</b><small>${s.mode==='digital'?'Digital':'Live table'} · ${s.players.length} players · ${esc(amount)} pot · ${s.ended?'Completed':'In progress'}</small><small>${esc(date)}</small></div><button data-resume="${esc(s.id)}">${s.ended?'View':'Resume'} →</button></div>`}).join('');
  document.querySelectorAll('[data-resume]').forEach(b=>b.onclick=()=>resumeSession(b.dataset.resume));
 }
-function resumeSession(id){if(!sessionLibrary[id])return;state=JSON.parse(JSON.stringify(sessionLibrary[id]));screenMode='game';$('bet').value=(state.ante/100).toFixed(2);save();render();sound('tap');window.scrollTo({top:0,behavior:'instant'})}
+function resumeSession(id){if(!sessionLibrary[id])return;state=JSON.parse(JSON.stringify(sessionLibrary[id]));screenMode='game';$('bet').value=(state.ante/100).toFixed(2);save();render();window.scrollTo({top:0,behavior:'instant'})}
 function openNewGame(){if(state)save();screenMode='setup';draftPlayers=[];$('session-name').value='';$('player-name').value='';$('player-error').textContent='';render();$('player-name').focus()}
 function openMenu(){if(state)save();clearCelebration();screenMode='welcome';render();window.scrollTo({top:0,behavior:'instant'})}
 function renderPlayerChips(){
@@ -29,10 +29,11 @@ function renderPlayerChips(){
  $('player-count').textContent=draftPlayers.length+' / 30 players added'+(draftPlayers.length<2?' · Add at least 2 to start.':' · Ready to play.');
  document.querySelectorAll('[data-remove-player]').forEach(b=>b.onclick=()=>{draftPlayers.splice(Number(b.dataset.removePlayer),1);$('player-error').textContent='';renderPlayerChips();$('player-name').focus()});
 }
-function addPlayer(){const name=$('player-name').value.trim();$('player-error').textContent='';if(!name){$('player-error').textContent='Enter a player name first.';return}if(draftPlayers.length>=30){$('player-error').textContent='This table supports up to 30 players.';return}if(draftPlayers.some(n=>n.toLowerCase()===name.toLowerCase())){$('player-error').textContent='That name is already at the table. Use a unique name.';return}draftPlayers.push(name);$('player-name').value='';renderPlayerChips();$('player-name').focus();sound('tap')}
+function addPlayer(){const name=$('player-name').value.trim();$('player-error').textContent='';if(!name){$('player-error').textContent='Enter a player name first.';arcadeCue('error');return}if(draftPlayers.length>=30){$('player-error').textContent='This table supports up to 30 players.';arcadeCue('error');return}if(draftPlayers.some(n=>n.toLowerCase()===name.toLowerCase())){$('player-error').textContent='That name is already at the table. Use a unique name.';arcadeCue('error');return}draftPlayers.push(name);$('player-name').value='';renderPlayerChips();$('player-name').focus();arcadeCue('add')}
 document.getElementById('add-player').onclick=addPlayer;
 document.getElementById('player-name').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();addPlayer()}};
 document.getElementById('welcome-new').onclick=openNewGame;
 document.getElementById('welcome-sound').onclick=()=>{document.getElementById('sound-toggle').click();renderWelcome()};
 document.getElementById('setup-menu').onclick=openMenu;
 document.getElementById('game-menu').onclick=openMenu;
+

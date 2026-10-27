@@ -47,6 +47,6 @@ function renderMatchRule(){
 }
 $('match-double').onclick=()=>{
  if(!state||state.ended)return;
- state.matchDouble=state.matchDouble!==true;save();render();sound('tap');
+ state.matchDouble=state.matchDouble!==true;save();render();
  $('seating-status').textContent='Matching cards now cost '+(state.matchDouble?'twice':'once')+' the bet. Already recorded results are unchanged.';
 };
