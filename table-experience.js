@@ -71,7 +71,7 @@ function playFeedback(e,potBefore){if(state.mode==='digital'&&['loss','match'].i
 function playLossFeedback(e,potBefore){
  clearCelebration();const full=e.bet===potBefore,c=$('celebration'),amount=-e.deltas[e.player];
  c.className=full?'loss-full':'loss-small';
- c.innerHTML='<div class="loss-ripple"></div><div class="loss-banner"><span>'+(e.type==='match'?'MATCH · DOUBLE PAYMENT':full?'FULL-POT BET LOST':'OUTSIDE THE CARDS')+'</span><strong>'+esc(state.players[e.player])+'</strong><b>−'+money(amount)+'</b><small>Added to the pot'+(full&&e.type==='match'?' · Full-pot bet':'')+'</small></div>'+(full?Array.from({length:12},(_,i)=>'<i class="loss-fragment" style="--angle:'+i*30+'deg;--travel:'+(65+i%3*20)+'px"></i>').join(''):'');
+ c.innerHTML='<div class="loss-ripple"></div><div class="loss-banner"><span>'+(e.type==='match'?(amount===e.bet*2?'MATCH · DOUBLE PAYMENT':'MATCH · BET PAID'):full?'FULL-POT BET LOST':'OUTSIDE THE CARDS')+'</span><strong>'+esc(state.players[e.player])+'</strong><b>−'+money(amount)+'</b><small>Added to the pot'+(full&&e.type==='match'?' · Full-pot bet':'')+'</small></div>'+(full?Array.from({length:12},(_,i)=>'<i class="loss-fragment" style="--angle:'+i*30+'deg;--travel:'+(65+i%3*20)+'px"></i>').join(''):'');
  document.querySelector('[data-seat="'+e.player+'"]').classList.add('loser-seat');
  sound(full?'full-'+e.type:e.type);
  celebrationTimer=setTimeout(clearCelebration,full?2700:1500);
