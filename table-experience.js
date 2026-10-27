@@ -5,7 +5,54 @@ function renderDirection(){const b=$('direction');b.textContent=state.direction=
 function updateSoundButton(){const b=document.getElementById('sound-toggle');b.textContent=soundsEnabled?'Sound on ♪':'Sound off ♩';b.setAttribute('aria-pressed',String(soundsEnabled))}
 function unlockAudio(){if(!soundsEnabled)return;try{if(!audioContext){audioContext=new (window.AudioContext||window.webkitAudioContext)();masterGain=audioContext.createGain();masterGain.gain.value=.18;const compressor=audioContext.createDynamicsCompressor();masterGain.connect(compressor);compressor.connect(audioContext.destination)}if(audioContext.state==='suspended')audioContext.resume().catch(()=>{})}catch{}}
 function tone(freq,at,duration,volume=.25,type='sine',endFreq){if(!soundsEnabled||!audioContext||audioContext.state!=='running')return;const start=audioContext.currentTime+at,o=audioContext.createOscillator(),g=audioContext.createGain();o.type=type;o.frequency.setValueAtTime(freq,start);if(endFreq)o.frequency.exponentialRampToValueAtTime(endFreq,start+duration);g.gain.setValueAtTime(.0001,start);g.gain.exponentialRampToValueAtTime(volume,start+.012);g.gain.exponentialRampToValueAtTime(.0001,start+duration);o.connect(g);g.connect(masterGain);o.start(start);o.stop(start+duration+.02)}
-function sound(kind){unlockAudio();if(!soundsEnabled)return;if(kind==='full'){[523.25,659.25,783.99,1046.5,1318.5].forEach((f,i)=>{tone(f,i*.10,.65,.28);tone(f*2,i*.10,.25,.06)});[523.25,659.25,783.99].forEach(f=>tone(f,.5,1.2,.12))}else if(kind==='win'){[659.25,987.77,1318.5].forEach((f,i)=>tone(f,i*.075,.38,.22))}else if(kind==='loss'){tone(260,0,.22,.24,'sine',170);tone(130,.025,.18,.2)}else if(kind==='match'){tone(392,0,.16,.22,'triangle');tone(311,.13,.28,.2,'triangle')}else if(kind==='ante'){[440,660,880].forEach((f,i)=>tone(f,i*.055,.2,.14))}else{tone(700,0,.065,.12,'sine',480)}}
+// A quiet shared room gives the mallets and impacts a natural tail.
+let soundRoom;
+function roomBus(){
+ if(soundRoom)return soundRoom;
+ const convolver=audioContext.createConvolver(),wet=audioContext.createGain();
+ const length=Math.floor(audioContext.sampleRate*.65),impulse=audioContext.createBuffer(2,length,audioContext.sampleRate);
+ for(let c=0;c<2;c++){const data=impulse.getChannelData(c);for(let i=0;i<length;i++)data[i]=(Math.random()*2-1)*Math.pow(1-i/length,3)*.45}
+ convolver.buffer=impulse;wet.gain.value=.16;convolver.connect(wet);wet.connect(masterGain);soundRoom=convolver;return convolver;
+}
+function mallet(freq,at,duration,level=.28){
+ const start=audioContext.currentTime+at;
+ // Soft fundamental, bell-like overtones, and a brief wooden attack.
+ [[1,1],[2.76,.19],[5.4,.035]].forEach(([ratio,weight])=>{
+ const oscillator=audioContext.createOscillator(),gain=audioContext.createGain();
+ oscillator.frequency.value=freq*ratio;
+ gain.gain.setValueAtTime(.0001,start);gain.gain.exponentialRampToValueAtTime(level*weight,start+.006);
+ gain.gain.exponentialRampToValueAtTime(.0001,start+duration/(ratio===1?1:1.7));
+ oscillator.connect(gain);gain.connect(masterGain);gain.connect(roomBus());
+ oscillator.start(start);oscillator.stop(start+duration+.03);
+ oscillator.onended=()=>{oscillator.disconnect();gain.disconnect()};
+ });
+}
+function brushedImpact(at,duration,level=.22,frequency=800){
+ const start=audioContext.currentTime+at,source=audioContext.createBufferSource(),filter=audioContext.createBiquadFilter(),gain=audioContext.createGain();
+ const buffer=audioContext.createBuffer(1,Math.ceil(audioContext.sampleRate*duration),audioContext.sampleRate),data=buffer.getChannelData(0);
+ for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1);
+ source.buffer=buffer;filter.type='lowpass';filter.frequency.setValueAtTime(frequency,start);filter.frequency.exponentialRampToValueAtTime(180,start+duration);
+ gain.gain.setValueAtTime(.0001,start);gain.gain.exponentialRampToValueAtTime(level,start+.009);gain.gain.exponentialRampToValueAtTime(.0001,start+duration);
+ source.connect(filter);filter.connect(gain);gain.connect(masterGain);gain.connect(roomBus());source.start(start);source.stop(start+duration+.02);
+ source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect()};
+}
+function sound(kind){
+ unlockAudio();if(!soundsEnabled||!audioContext||audioContext.state!=='running')return;
+ if(kind==='win'||kind==='full'){
+ const full=kind==='full';
+ brushedImpact(0,.12,.12,1900);
+ (full?[392,493.88,587.33,783.99,987.77,1174.66]:[587.33,783.99,987.77]).forEach((f,i)=>mallet(f,i*(full?.105:.09),full?1.05:.65,full?.32:.27));
+ if(full){[196,293.66,392].forEach(f=>tone(f,.38,1.1,.13,'sine'));[1567.98,1174.66,1975.53].forEach((f,i)=>mallet(f,.8+i*.14,.65,.08))}
+ }else if(['loss','match','full-loss','full-match'].includes(kind)){
+ const full=kind.startsWith('full-'),match=kind.endsWith('match');
+ // Muted felt impact and a short descending minor phrase, never a harsh buzzer.
+ brushedImpact(0,full?.48:.23,full?.52:.30,full?1100:700);
+ tone(full?120:160,0,full?.65:.3,full?.48:.3,'sine',full?48:85);
+ (match?[349.23,311.13,233.08]:[311.13,233.08]).forEach((f,i)=>mallet(f,.035+i*.14,full?.8:.45,.19));
+ if(full){brushedImpact(.23,.55,.22,550);mallet(155.56,.43,.9,.23);tone(77.78,.3,.85,.18)}
+ }else if(kind==='ante'){[440,660,880].forEach((f,i)=>mallet(f,i*.055,.25,.12))}
+ else{tone(700,0,.065,.12,'sine',480)}
+}
 document.addEventListener('pointerdown',unlockAudio,{passive:true});document.addEventListener('keydown',unlockAudio);
 document.getElementById('sound-toggle').onclick=()=>{soundsEnabled=!soundsEnabled;try{localStorage.setItem('inbetween-sound',soundsEnabled?'on':'off')}catch{}if(masterGain&&audioContext)masterGain.gain.setTargetAtTime(soundsEnabled?.18:0,audioContext.currentTime,.02);updateSoundButton();if(soundsEnabled)sound('tap')};
 document.getElementById('direction').onclick=()=>{if(!state||state.ended)return;state.direction*=-1;save();render();sound('tap');$('seating-status').textContent='Direction changed. '+state.players[state.turn]+' keeps the current turn.'};
@@ -19,14 +66,14 @@ function bindSeats(){document.querySelectorAll('[data-seat]').forEach(b=>{const 
  b.onpointercancel=()=>{drag=null;suppressClick=true;render()};
 })}
 function clearCelebration(){clearTimeout(celebrationTimer);const c=document.getElementById('celebration');if(c){c.innerHTML='';c.className=''}document.querySelectorAll('.winner-seat,.loser-seat').forEach(b=>b.classList.remove('winner-seat','loser-seat'))}
-function playFeedback(e,potBefore){if(state.mode==='digital'&&['loss','match'].includes(e.type)){playLossFeedback(e,potBefore);return}if(e.type!=='win'){sound(e.type);return}const full=e.bet===potBefore;const c=$('celebration'),winner=state.players[e.player];c.className=full?'celebrate-full':'celebrate-small';c.innerHTML=`<div class="win-banner"><span>${full?'✦ FULL POT WIN ✦':'✧ NICE WIN'}</span><strong>${esc(winner)}</strong><b>+${money(e.bet)}</b></div>`+(full?Array.from({length:38},(_,i)=>`<i class="confetti" style="--x:${(i*41)%100}%;--delay:${(i%7)*.065}s;--color:${['#ecd58a','#b7d39b','#fff4c8','#8ac7ad'][i%4]};--rotate:${i*47}deg"></i>`).join(''):'');document.querySelector('[data-seat="'+e.player+'"]').classList.add('winner-seat');sound(full?'full':'win');celebrationTimer=setTimeout(clearCelebration,full?3500:1700)}
+function playFeedback(e,potBefore){if(state.mode==='digital'&&['loss','match'].includes(e.type)){playLossFeedback(e,potBefore);return}if(e.type!=='win'){sound(['loss','match'].includes(e.type)&&e.bet===potBefore?'full-'+e.type:e.type);return}const full=e.bet===potBefore;const c=$('celebration'),winner=state.players[e.player];c.className=full?'celebrate-full':'celebrate-small';c.innerHTML=`<div class="win-banner"><span>${full?'✦ FULL POT WIN ✦':'✧ NICE WIN'}</span><strong>${esc(winner)}</strong><b>+${money(e.bet)}</b></div>`+(full?Array.from({length:38},(_,i)=>`<i class="confetti" style="--x:${(i*41)%100}%;--delay:${(i%7)*.065}s;--color:${['#ecd58a','#b7d39b','#fff4c8','#8ac7ad'][i%4]};--rotate:${i*47}deg"></i>`).join(''):'');document.querySelector('[data-seat="'+e.player+'"]').classList.add('winner-seat');sound(full?'full':'win');celebrationTimer=setTimeout(clearCelebration,full?3500:1700)}
 
 function playLossFeedback(e,potBefore){
  clearCelebration();const full=e.bet===potBefore,c=$('celebration'),amount=-e.deltas[e.player];
  c.className=full?'loss-full':'loss-small';
  c.innerHTML='<div class="loss-ripple"></div><div class="loss-banner"><span>'+(e.type==='match'?'MATCH · DOUBLE PAYMENT':full?'FULL-POT BET LOST':'OUTSIDE THE CARDS')+'</span><strong>'+esc(state.players[e.player])+'</strong><b>−'+money(amount)+'</b><small>Added to the pot'+(full&&e.type==='match'?' · Full-pot bet':'')+'</small></div>'+(full?Array.from({length:12},(_,i)=>'<i class="loss-fragment" style="--angle:'+i*30+'deg;--travel:'+(65+i%3*20)+'px"></i>').join(''):'');
  document.querySelector('[data-seat="'+e.player+'"]').classList.add('loser-seat');
- sound(e.type);if(full){tone(110,.2,.7,.3,'triangle',55);tone(82,.4,.8,.2,'sine',41)}
+ sound(full?'full-'+e.type:e.type);
  celebrationTimer=setTimeout(clearCelebration,full?2700:1500);
 }
 
@@ -44,3 +91,4 @@ document.getElementById('motion-toggle').onclick=()=>{
  updateMotionPreference();
 };
 updateMotionPreference();
+

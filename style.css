@@ -41,3 +41,79 @@ body.playing .table-scroll:not(.large-table){overflow:hidden}
 /* Motion is controlled explicitly in the game menu on every device. */
 body.motion-off .shuffle-deck i,body.motion-off .flip-card,body.motion-off .dealing-cards .seat-cards i,body.motion-off .dealing-cards .card-facedown,body.motion-off .dealing-cards .felt,body.motion-off .win-banner,body.motion-off .winner-seat .person,body.motion-off .loss-banner,body.motion-off .loser-seat .seat-name{animation:none!important}
 body.motion-off .confetti,body.motion-off .loss-ripple,body.motion-off .loss-fragment{display:none!important}
+
+
+.table-console{flex-shrink:0}
+/* Landscape reserves real space for the table and a separate control rail. */
+@media (orientation:landscape) and (min-width:600px) and (max-height:950px){
+ body.playing{min-height:0;height:100dvh}
+ body.playing header{height:34px;min-height:34px}
+ body.playing main{max-width:1600px;padding:6px max(10px,env(safe-area-inset-right)) 8px max(10px,env(safe-area-inset-left))}
+ body.playing .game-topbar{flex-direction:row;margin-bottom:6px;gap:6px}
+ body.playing .game-top-title{display:none}
+ body.playing .top-actions{width:100%;display:flex;flex-wrap:nowrap;gap:5px}
+ body.playing .top-actions button{flex:1;font-size:11px;padding:7px;min-height:34px}
+ body.playing .table-panel{display:grid;grid-template-columns:minmax(0,1fr) clamp(240px,29vw,330px);grid-template-rows:auto minmax(0,1fr);gap:6px 16px;padding:10px 14px;position:relative}
+ body.playing .table-panel .sectiontitle{grid-column:1;grid-row:1;padding:0;margin:0;min-width:0}
+ body.playing .table-panel h2{font-size:17px}
+ body.playing .table-options{grid-column:2;grid-row:1;position:static;display:flex;justify-content:flex-end;margin:0}
+ body.playing .tablehint{display:none}
+ body.playing .table-scroll{grid-column:1;grid-row:2;min-height:0;padding:0;overflow:hidden}
+ body.playing #table-scene{min-height:0;min-width:0;height:100%}
+ body.playing .table-console{grid-column:2;grid-row:2;min-height:0;overflow:auto;overscroll-behavior:contain;border-left:1px solid #dce2d6;padding:8px 0 0 14px;display:flex;flex-direction:column;gap:8px}
+ body.playing #table-update{font-size:10px;line-height:1.4;margin:0}
+ body.playing #table-actions{display:flex;flex-wrap:wrap;gap:6px;margin:0}
+ body.playing #table-actions .table-bet-group{width:100%;max-width:none;min-width:0;flex-basis:100%}
+ body.playing #table-actions>button{flex:1;min-width:44px;font-size:10px;padding:9px 4px}
+ body.playing .bet-heading{flex-wrap:wrap;gap:5px;margin-bottom:5px}
+ body.playing .pot-shortcuts{margin-left:auto}
+ body.playing .pot-shortcuts button{padding:7px!important}
+ body.playing #digital-actions{width:100%;flex-wrap:wrap;gap:5px}
+ body.playing #digital-actions .primary{flex:1;min-width:120px;padding:10px;min-height:40px}
+ body.playing #digital-actions #digital-pass{padding:10px 7px}
+ body.playing #digital-rules-button{margin-left:auto}
+ body.playing #card-odds{margin:0;width:100%;padding:7px}
+ body.playing .odds-heading{flex-wrap:wrap;gap:2px}
+ body.playing #suggested-bets{flex-wrap:wrap;margin:0;gap:5px}
+ body.playing #suggested-bets>span{width:100%;text-align:center}
+ body.playing .table-bottom{margin-top:auto;gap:3px}
+ body.playing .table-bottom button{padding:8px 5px;font-size:10px}
+ body.playing .cash-note{display:none}
+ body.playing .felt,body.digital-game .felt{inset:14% 8%!important;border-width:8px}
+ body.playing #digital-stage{width:300px;max-width:70%;gap:6px}
+ body.playing .digital-pot{padding:4px 9px;gap:6px}
+ body.playing .digital-pot strong{font-size:18px}
+ body.playing #digital-status{font-size:11px;min-height:16px}
+ body.playing .seat{width:76px}
+ body.playing .seat-name{max-width:76px;font-size:10px}
+ body.playing .seat-status{display:none}
+ body.digital-game .seat-cards{order:-1;height:20px;margin:2px auto}
+ body.digital-game .seat-cards i{height:19px;width:14px}
+}
+@media (orientation:landscape) and (min-width:600px) and (max-height:500px){
+ body.playing header{display:none}
+ body.playing .table-panel{gap:3px 8px;padding:6px 8px;grid-template-columns:minmax(0,1fr) 248px}
+ body.playing .table-panel h2{font-size:14px}
+ body.playing .table-console{padding:3px 0 0 8px;gap:5px}
+ body.playing .top-actions button{min-height:30px;padding:5px;font-size:10px}
+ body.playing #digital-stage{gap:4px}
+ body.playing .playing-card,body.playing .draw-slot{width:48px;height:68px}
+ body.playing #digital-cards{min-height:70px;gap:8px}
+ body.playing .deck-illustration{width:48px;height:68px}
+ body.playing .digital-pot strong{font-size:15px}
+ body.playing #digital-status{font-size:10px;line-height:1.2}
+ body.playing .odds-note{display:none}
+ body.playing .odds-values{margin:3px 0}
+ body.playing #digital-actions #digital-rules-button{padding:5px}
+ body.playing .seat{min-height:30px}
+ body.playing .win-banner,body.playing .loss-banner{padding:12px 18px}
+ body.playing .win-banner strong,body.playing .loss-banner strong{font-size:16px;margin:4px 0}
+ body.playing .win-banner b,body.playing .loss-banner b{font-size:24px}
+}
+@media (orientation:landscape) and (min-width:600px) and (max-height:500px){
+ body.playing #digital-actions #digital-rules-button{position:absolute;right:110px;top:7px;font-size:10px;padding:7px}
+ body.playing .odds-values small{font-size:8px;white-space:nowrap}
+ body.playing .odds-values{gap:4px}
+ body.playing .odds-values b{font-size:14px}
+ body.playing .table-bottom button{padding:6px 4px}
+}
