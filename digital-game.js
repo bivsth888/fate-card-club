@@ -1,14 +1,14 @@
 let digitalAnimationTimer, digitalRenderKey='', digitalFlowKey='';
-function stopDigitalFlow(){clearTimeout(digitalAnimationTimer);digitalFlowKey='';digitalRenderKey=''}
+function stopDigitalFlow(){clearTimeout(digitalAnimationTimer);digitalFlowKey='';digitalRenderKey='';stopCardFoley()}
 function scheduleDigitalFlow(){
  if(state?.mode!=='digital'||state.ended||screenMode!=='game'){stopDigitalFlow();return}
  const d=state.digital,key=state.id+':'+d.round+':'+state.turn+':'+d.phase+':'+(totals().pot>0);
  if(key===digitalFlowKey)return;clearTimeout(digitalAnimationTimer);digitalFlowKey=key;
  const active=()=>state?.mode==='digital'&&state.digital===d&&!state.ended&&screenMode==='game';
  const later=(ms,fn)=>{digitalAnimationTimer=setTimeout(()=>{if(active())fn()},ms)};
- if(d.phase==='shuffling')later(1800,()=>{d.phase='handoff';save();render();cardNoise('flip')});
- else if(d.phase==='handoff'&&totals().pot)later(650,revealPair);
- else if(d.phase==='revealing')later(850,()=>{d.phase='betting';save();render()});
+ if(d.phase==='shuffling')later(1800,()=>{d.phase='handoff';save();render()});
+ else if(d.phase==='handoff'&&totals().pot)later(900,revealPair);
+ else if(d.phase==='revealing')later(1000,()=>{d.phase='betting';save();render()});
  else if(d.phase==='ready'&&d.round&&totals().pot)later(650,digitalDeal);
  else if(d.phase==='result'){
   if(d.resultShown){if(totals().pot)later(400,advanceDigital);return}
@@ -46,16 +46,63 @@ function classifyHand(pair,third,ace){const [lo,hi]=pair.map(c=>cardRank(c,ace))
 function hasGap(pair,ace){const [lo,hi]=pair.map(c=>cardRank(c,ace)).sort((a,b)=>a-b);return hi-lo>1}
 function nextEligible(order,player,direction,done){const pos=order.indexOf(player);for(let step=1;step<=order.length;step++){const candidate=order[(pos+direction*step+order.length*2)%order.length];if(!done.includes(candidate))return candidate}return null}
 function cardMarkup(c,faceUp=false,index=0,animate=false){if(!faceUp)return `<div class="playing-card card-facedown" role="img" aria-label="Face-down card"><div class="card-back"><span>♠</span></div></div>`;const rank=({1:'A',11:'J',12:'Q',13:'K'}[c.rank]||c.rank),red=c.suit==='♥'||c.suit==='♦';return `<div class="playing-card ${red?'red-card':''} ${animate?'flip-card':''}" style="--card-delay:${index*.12}s" role="img" aria-label="${cardName(c)}"><div class="card-back reveal-back"><span>♠</span></div><div class="card-face"><span class="card-corner">${rank}<small>${c.suit}</small></span><span class="card-emblem">${c.rank>10?rank:c.suit}</span><span class="card-corner corner-bottom">${rank}<small>${c.suit}</small></span></div></div>`}
-function cardNoise(kind){unlockAudio();if(!soundsEnabled||!audioContext||audioContext.state!=='running')return;const count=kind==='shuffle'?22:2;for(let i=0;i<count;i++){const duration=.075,buffer=audioContext.createBuffer(1,Math.floor(audioContext.sampleRate*duration),audioContext.sampleRate),data=buffer.getChannelData(0);for(let k=0;k<data.length;k++)data[k]=(Math.random()*2-1)*Math.exp(-k/data.length*5);const source=audioContext.createBufferSource(),filter=audioContext.createBiquadFilter(),gain=audioContext.createGain();source.buffer=buffer;filter.type='bandpass';filter.frequency.value=kind==='shuffle'?1800:2400;gain.gain.value=.17;source.connect(filter);filter.connect(gain);gain.connect(masterGain);source.start(audioContext.currentTime+i*.07)}}
+// Dry, non-pitched card foley: paper friction, irregular edge releases and felt landings.
+const cardFoleySources=new Set();
+function stopCardFoley(){for(const source of cardFoleySources){try{source.stop()}catch{}}cardFoleySources.clear()}
+function cardFriction(at,duration,level,cutoff,texture='slide'){
+ const rate=audioContext.sampleRate,buffer=audioContext.createBuffer(1,Math.ceil(rate*duration),rate),data=buffer.getChannelData(0);
+ let soft=0,grain=0;
+ for(let i=0;i<data.length;i++){
+  const t=i/rate,u=i/data.length,white=Math.random()*2-1;
+  soft=.78*soft+.22*white;grain=.96*grain+.04*(Math.random()*2-1);
+  const envelope=texture==='snap'?Math.exp(-u*9)*Math.min(1,t/.0015):Math.pow(Math.sin(Math.PI*u),1.1);
+  const flutter=.65+.2*Math.sin(t*93)+.15*Math.sin(t*217);
+  data[i]=(soft*.8+white*.16+grain*.35)*envelope*flutter;
+ }
+ const source=audioContext.createBufferSource(),filter=audioContext.createBiquadFilter(),gain=audioContext.createGain();
+ source.buffer=buffer;filter.type='lowpass';filter.frequency.value=cutoff;gain.gain.value=level;
+ source.connect(filter);filter.connect(gain);gain.connect(masterGain);
+ cardFoleySources.add(source);source.onended=()=>{cardFoleySources.delete(source);source.disconnect();filter.disconnect();gain.disconnect()};
+ source.start(audioContext.currentTime+at);source.stop(audioContext.currentTime+at+duration+.01);
+}
+function cardNoise(kind){
+ unlockAudio();if(!soundsEnabled||!audioContext||audioContext.state!=='running')return;
+ if(kind==='shuffle'){
+  stopCardFoley();cardFriction(0,.24,1.2,2800);
+  // Two packets riffle unevenly, bridge together, then square against the felt.
+  let t=.24;for(let i=0;i<32;i++){cardFriction(t,.018+Math.random()*.025,.65+Math.random()*.6,2600+Math.random()*2300,'snap');t+=.012+Math.random()*.014}
+  cardFriction(.90,.40,1.0,2200);
+  for(let i=0;i<13;i++)cardFriction(1.04+i*.025,.027,.65,3100,'snap');
+  cardFriction(1.47,.08,1.1,850,'snap');cardFriction(1.61,.065,.8,1100,'snap');
+ }else if(kind==='travel'){
+  cardFriction(0,.36,.85,1900);cardFriction(.12,.38,.65,2300);
+  cardFriction(.68,.055,.8,800,'snap');cardFriction(.78,.055,.7,950,'snap');
+ }else{
+  const pair=kind==='pair';
+  for(let i=0;i<(pair?2:1);i++){const at=i*.14;cardFriction(at,.16,.7,2800);cardFriction(at+.32,.035,.65,3900,'snap');cardFriction(at+.64,.05,.75,950,'snap')}
+ }
+}
+function animateSeatToCenter(){
+ const seat=document.querySelector('[data-seat="'+state.turn+'"]');if(!seat)return;
+ const source=(seat.querySelector('.seat-cards')||seat).getBoundingClientRect();
+ document.querySelectorAll('#digital-cards > .card-facedown').forEach((card,i)=>{
+  const target=card.getBoundingClientRect();
+  card.style.setProperty('--seat-x',(source.left+source.width/2-target.left-target.width/2)+'px');
+  card.style.setProperty('--seat-y',(source.top+source.height/2-target.top-target.height/2)+'px');
+  card.style.setProperty('--seat-tilt',(i?12:-12)+'deg');
+  card.style.setProperty('--flight-delay',(i*.10)+'s');card.classList.add('seat-flight');
+ });
+ cardNoise('travel');
+}
 function digitalDeal(){const d=state.digital;if(state.ended||d.phase!=='ready'||totals().pot===0)return;ensureSeating();d.deck=shuffledDeck();d.hands=state.players.map(()=>[]);d.done=[];d.third=null;d.result=null;d.bet=0;d.round++;for(let card=0;card<2;card++)for(const player of state.seatOrder)d.hands[player].push(d.deck.pop());d.phase='shuffling';save();render();cardNoise('shuffle')}
-function revealPair(){const d=state.digital;if(state.ended||d.phase!=='handoff'||!totals().pot)return;d.phase='revealing';save();render();cardNoise('flip')}
-function resolveDigital(pass=false){const d=state.digital;if(state.ended||d.phase!=='betting')return;const pair=d.hands[state.turn],pot=totals().pot;if(!pot)return;const bet=pass?0:cents($('table-bet').value);if(!pass&&(!hasGap(pair,d.ace)||!Number.isSafeInteger(bet)||bet<=0||bet>pot)){$('table-error').textContent=!hasGap(pair,d.ace)?'No card fits between these ranks. Pass this hand for free.':'Choose a positive bet no larger than the pot.';return}const player=state.turn;d.third=pass?null:d.deck.pop();d.result=pass?'pass':classifyHand(pair,d.third,d.ace);d.bet=bet;d.resultShown=false;d.phase='result';d.done.push(player);const deltas=state.players.map(()=>0);deltas[player]=pass?0:d.result==='win'?bet:-bet*(d.result==='match'&&state.matchDouble===true?2:1);cardNoise('flip');commit({type:d.result,player,bet,deltas,cards:pass?pair.slice():[pair[0],d.third,pair[1]],round:d.round});}
+function revealPair(){const d=state.digital;if(state.ended||d.phase!=='handoff'||!totals().pot)return;d.phase='revealing';save();render();cardNoise('pair')}
+function resolveDigital(pass=false){const d=state.digital;if(state.ended||d.phase!=='betting')return;const pair=d.hands[state.turn],pot=totals().pot;if(!pot)return;const bet=pass?0:cents($('table-bet').value);if(!pass&&(!hasGap(pair,d.ace)||!Number.isSafeInteger(bet)||bet<=0||bet>pot)){$('table-error').textContent=!hasGap(pair,d.ace)?'No card fits between these ranks. Pass this hand for free.':'Choose a positive bet no larger than the pot.';return}const player=state.turn;d.third=pass?null:d.deck.pop();d.result=pass?'pass':classifyHand(pair,d.third,d.ace);d.bet=bet;d.resultShown=false;d.phase='result';d.done.push(player);const deltas=state.players.map(()=>0);deltas[player]=pass?0:d.result==='win'?bet:-bet*(d.result==='match'&&state.matchDouble===true?2:1);if(!pass)cardNoise('flip');commit({type:d.result,player,bet,deltas,cards:pass?pair.slice():[pair[0],d.third,pair[1]],round:d.round});}
 function advanceDigital(){const d=state.digital;if(state.ended||d.phase!=='result'||!totals().pot)return;ensureSeating();const next=nextEligible(state.seatOrder,state.turn,state.direction,d.done);if(next===null){const pos=state.seatOrder.indexOf(state.turn);state.turn=state.seatOrder[(pos+state.direction+state.players.length)%state.players.length];d.phase='ready';d.hands=[];d.deck=[];d.done=[]}else{state.turn=next;d.phase='handoff'}d.third=null;d.result=null;d.bet=0;save();render()}
 function updateDigitalControls(){if(state?.mode!=='digital'||!state.digital)return;const d=state.digital,pot=totals().pot,canBet=!state.ended&&pot>0&&d.phase==='betting'&&hasGap(d.hands[state.turn],d.ace);$('table-bet').disabled=!canBet;$('bet-up').disabled=!canBet||cents($('table-bet').value)>=pot;$('bet-down').disabled=!canBet||cents($('table-bet').value)<=0;document.querySelectorAll('[data-fraction],[data-quick-bet]').forEach(b=>b.disabled=!canBet);$('digital-pass').hidden=state.ended||d.phase!=='betting';$('digital-pass').disabled=!pot;const primary=$('digital-primary');primary.disabled=state.ended||!pot;if(d.phase==='betting'&&!hasGap(d.hands[state.turn],d.ace))primary.disabled=true;primary.hidden=!['ready','betting'].includes(d.phase)||(d.phase==='ready'&&d.round>0);primary.textContent=({ready:d.round?'Shuffle next round':'Shuffle & deal',handoff:'Reveal my cards',betting:'Draw third card',result:d.done.length===state.players.length?'Next round →':'Next player →'})[d.phase];}
 function renderDigitalGame(){const isDigital=state.mode==='digital';document.body.classList.toggle('digital-ended',isDigital&&state.ended);$('digital-stage').hidden=!isDigital||state.ended;$('digital-actions').hidden=!isDigital||state.ended;$('mode-title').textContent=isDigital?'In Between · Digital':'Around the table';document.querySelector('.tablehint').innerHTML=isDigital?'Drag to arrange seats. Turns reveal automatically.':'Drag players to rearrange seats. Tap to choose a turn.';document.querySelectorAll('[data-table-result],#table-pass').forEach(b=>b.hidden=isDigital);if(!isDigital)return;const d=state.digital,pot=totals().pot,key=state.id+':'+d.round+':'+state.turn+':'+d.phase,animate=digitalRenderKey!==key;digitalRenderKey=key;$('digital-pot-amount').textContent=money(pot);$('digital-ante').hidden=state.ended||pot!==0||(d.phase==='result'&&!d.resultShown);$('digital-ante').textContent='Ante '+money(state.ante)+' each';$('digital-rules-ace').textContent='This session: Ace '+d.ace+'. '+(d.ace==='low'?'A = 1, then 2 through K = 13.':'2 through K = 13, then A = 14.');
  const currentPair=d.hands[state.turn];let caption='';if(d.phase==='ready'||d.phase==='shuffling'){if(animate)$('digital-cards').innerHTML='<div class="deck-illustration '+(d.phase==='shuffling'?'shuffle-deck':'')+'" aria-label="Shuffling deck">'+Array.from({length:8},(_,i)=>'<i style="--packet:'+i+'">♠</i>').join('')+'</div>';caption=d.phase==='shuffling'?'Shuffling the deck…':d.round?'New round · Shuffling next…':'A fresh deck. Everyone gets two cards.'}else{const revealed=d.phase!=='handoff',pair=currentPair.slice().sort((a,b)=>cardRank(a,d.ace)-cardRank(b,d.ace));if(animate)$('digital-cards').innerHTML=cardMarkup(pair[0],revealed,0,animate&&d.phase==='revealing')+`<div class="draw-slot">${d.third?cardMarkup(d.third,true,0,animate&&d.phase==='result'):'<span>'+(d.phase==='handoff'?'?':'DRAW')+'</span>'}</div>`+cardMarkup(pair[1],revealed,1,animate&&d.phase==='revealing');if(d.phase==='handoff')caption='Pass to '+state.players[state.turn]+' · Dealing your pair…';if(d.phase==='revealing')caption=state.players[state.turn]+' · Revealing cards…';if(d.phase==='betting')caption=hasGap(pair,d.ace)?'Choose a bet, then draw. Or pass for free.':'No gap between these ranks. Pass for free.';if(d.phase==='result')caption=({win:'In between! '+state.players[state.turn]+' wins '+money(d.bet)+'.',loss:'Outside. '+state.players[state.turn]+' pays '+money(d.bet)+'.',match:'Matching rank! '+state.players[state.turn]+' pays '+money(-(state.events.findLast(e=>e.player===state.turn&&e.round===d.round)?.deltas[state.turn]??-d.bet))+'.',pass:state.players[state.turn]+' passed. No money moved.'})[d.result]}
  $('digital-status').textContent=caption;$('digital-status').className=d.phase==='result'?'result-'+d.result:'';$('table-update').textContent='Round '+Math.max(1,d.round)+' · '+d.done.length+'/'+state.players.length+' played · Ace '+d.ace+(d.phase!=='ready'?' · '+d.deck.length+' cards in deck':'');
- document.querySelectorAll('[data-seat]').forEach(b=>{const i=Number(b.dataset.seat),done=d.done.includes(i);b.classList.toggle('hand-complete',done);const old=b.querySelector('.seat-cards');if(old)old.remove();if(d.hands[i]&&d.phase!=='shuffling'){const cards=document.createElement('span');cards.style.setProperty('--deal-order',state.seatOrder.indexOf(i));cards.className='seat-cards'+(done?' played':'');cards.setAttribute('aria-label',done?'Hand complete':'Two face-down cards');cards.innerHTML=done?'✓':'<i></i><i></i>';b.append(cards)}});$('table-scene').classList.toggle('dealing-cards',d.phase==='handoff');updateDigitalControls();renderCardOdds();scheduleDigitalFlow();
+ document.querySelectorAll('[data-seat]').forEach(b=>{const i=Number(b.dataset.seat),done=d.done.includes(i);b.classList.toggle('hand-complete',done);const old=b.querySelector('.seat-cards');if(old)old.remove();if(d.hands[i]&&d.phase!=='shuffling'){const cards=document.createElement('span');cards.style.setProperty('--deal-order',state.seatOrder.indexOf(i));cards.className='seat-cards'+(done?' played':'');cards.setAttribute('aria-label',done?'Hand complete':'Two face-down cards');cards.innerHTML=done?'✓':'<i></i><i></i>';b.append(cards)}});if(animate&&d.phase==='handoff')animateSeatToCenter();$('table-scene').classList.toggle('dealing-cards',d.phase==='handoff');$('digital-cards').classList.toggle('unfold-pair',d.phase==='revealing');updateDigitalControls();renderCardOdds();scheduleDigitalFlow();
 }
 document.querySelectorAll('[name=game-mode]').forEach(r=>r.onchange=()=>{document.getElementById('digital-setup').hidden=r.value!=='digital';document.querySelector('.rules small').textContent=r.value==='digital'?'The app deals cards and calculates every result automatically.':'Bets cannot exceed the pot. Record the result of your physical cards.'});
 document.getElementById('digital-primary').onclick=()=>{if(state.mode!=='digital')return;const phase=state.digital.phase;if(phase==='ready')digitalDeal();else if(phase==='handoff')revealPair();else if(phase==='betting')resolveDigital();else if(phase==='result')advanceDigital()};
