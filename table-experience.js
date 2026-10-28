@@ -146,3 +146,25 @@ document.getElementById('motion-toggle').onclick=()=>{
 };
 updateMotionPreference();
 
+
+const tableMenuToggle=document.getElementById('table-menu-toggle');
+const tableMenuActions=document.getElementById('table-menu-actions');
+function closeTableMenu(restoreFocus=false){
+ tableMenuActions.hidden=true;tableMenuToggle.setAttribute('aria-expanded','false');
+ if(restoreFocus)tableMenuToggle.focus();
+}
+tableMenuToggle.onclick=()=>{
+ const open=tableMenuActions.hidden;
+ tableMenuActions.hidden=!open;tableMenuToggle.setAttribute('aria-expanded',String(open));
+};
+document.addEventListener('click',event=>{
+ if(tableMenuActions.hidden)return;
+ if(tableMenuActions.contains(event.target)&&event.target.closest('button'))closeTableMenu(true);
+ else if(!tableMenuToggle.contains(event.target)&&!tableMenuActions.contains(event.target))closeTableMenu();
+},true);
+document.addEventListener('keydown',event=>{
+ if(event.key==='Escape'&&!tableMenuActions.hidden){event.preventDefault();closeTableMenu(true)}
+});
+document.addEventListener('focusin',event=>{
+ if(!tableMenuActions.hidden&&!tableMenuActions.contains(event.target)&&!tableMenuToggle.contains(event.target))closeTableMenu();
+});

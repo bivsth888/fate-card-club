@@ -195,3 +195,15 @@ body.playing .odds-note{margin-top:3px}
  100%{transform:translateY(0) rotateY(0) rotateZ(0)}
 }
 body.motion-off .card-facedown.seat-flight,body.motion-off .unfold-pair>.flip-card{animation:none!important}
+
+/* A single disclosure replaces the two rows of table actions. */
+body.playing .game-topbar{position:relative;z-index:20;display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;flex-shrink:0}
+body.playing .game-top-title{display:block;flex:1;min-width:0;max-width:none;font-size:11px;color:#70806e}
+.hamburger-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:7px 11px;min-height:36px;background:#fff;border:1px solid #dce2d6;font-size:11px;white-space:nowrap;margin-left:auto}
+.hamburger-button>span{font-size:18px;line-height:1}
+.hamburger-button[aria-expanded=true]{background:#173f35;color:#fff;border-color:#173f35}
+body.playing .top-actions{position:absolute;right:0;top:calc(100% + 6px);width:min(280px,calc(100vw - 28px));max-height:calc(100dvh - 100px);overflow-y:auto;display:flex;flex-direction:column;flex-wrap:nowrap;gap:4px;padding:8px;background:#fff;border:1px solid #dce2d6;border-radius:12px;box-shadow:0 14px 40px #153d3330}
+body.playing .top-actions button{flex:none;grid-column:auto;width:100%;min-height:42px;text-align:left;font-size:12px;padding:10px 13px;border:0;border-radius:7px}
+body.playing .top-actions #reset{background:#173f35;color:white}
+@media(max-width:540px){body.playing .game-top-title{font-size:10px;max-width:55%}.hamburger-button{min-height:34px;padding:6px 10px}}
+@media(orientation:landscape) and (max-height:500px){.hamburger-button{min-height:30px;padding:4px 9px}body.playing .top-actions{max-height:calc(100dvh - 55px)}body.playing .top-actions button{min-height:35px;padding:7px 11px}}
