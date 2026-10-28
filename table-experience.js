@@ -3,7 +3,50 @@ let soundsEnabled=true;try{soundsEnabled=localStorage.getItem('inbetween-sound')
 function ensureSeating(){if(!Array.isArray(state.seatOrder)||state.seatOrder.length!==state.players.length||new Set(state.seatOrder).size!==state.players.length||state.seatOrder.some(i=>!Number.isInteger(i)||i<0||i>=state.players.length))state.seatOrder=state.players.map((_,i)=>i);if(state.direction!==-1)state.direction=1}
 function renderDirection(){const b=$('direction');b.textContent=state.direction===1?'↻ Clockwise':'↺ Anticlockwise';b.setAttribute('aria-label','Turn direction: '+(state.direction===1?'clockwise':'anticlockwise')+'. Click to reverse.');b.disabled=state.ended;document.querySelector('.felt').dataset.direction=state.direction;updateSoundButton()}
 function updateSoundButton(){const b=document.getElementById('sound-toggle');b.textContent=soundsEnabled?'Sound on ♪':'Sound off ♩';b.setAttribute('aria-pressed',String(soundsEnabled))}
-function unlockAudio(){if(!soundsEnabled)return;try{if(!audioContext){audioContext=new (window.AudioContext||window.webkitAudioContext)();masterGain=audioContext.createGain();masterGain.gain.value=.18;const compressor=audioContext.createDynamicsCompressor();masterGain.connect(compressor);compressor.connect(audioContext.destination)}if(audioContext.state==='suspended')audioContext.resume().catch(()=>{})}catch{}}
+let audioResumePromise=null;
+function unlockAudio(){
+ if(!soundsEnabled)return Promise.resolve(false);
+ try{
+  if(!audioContext||audioContext.state==='closed'){
+   // Where supported, request audible media output rather than ambient audio.
+   try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch{}
+   audioContext=new (window.AudioContext||window.webkitAudioContext)();
+   soundRoom=undefined;lastUiCue=-Infinity;audioResumePromise=null;
+   masterGain=audioContext.createGain();masterGain.gain.value=.18;
+   const compressor=audioContext.createDynamicsCompressor();masterGain.connect(compressor);compressor.connect(audioContext.destination);
+  }
+  if(audioContext.state==='running')return Promise.resolve(true);
+  if(!audioResumePromise){
+   const context=audioContext;
+   // Call resume synchronously inside the touch/click gesture; await its result for cues.
+   const pending=Promise.resolve(context.resume()).then(()=>context===audioContext&&context.state==='running',()=>false);
+   audioResumePromise=pending;
+   const clear=()=>{if(audioResumePromise===pending)audioResumePromise=null};
+   pending.then(clear);setTimeout(clear,700);
+  }
+  return audioResumePromise;
+ }catch{return Promise.resolve(false)}
+}
+function resumeSound(callback){
+ const requested=Date.now();
+ unlockAudio().then(ready=>{if(ready&&soundsEnabled&&!document.hidden&&Date.now()-requested<700)callback()});
+}
+function testTableSound(){
+ soundsEnabled=true;try{localStorage.setItem('inbetween-sound','on')}catch{}
+ // Explicit testing also repairs a context that the phone failed to resume.
+ if(audioContext&&audioContext.state!=='running'){
+  const old=audioContext;audioContext=null;audioResumePromise=null;
+  try{Promise.resolve(old.close()).catch(()=>{})}catch{}
+ }
+ const ready=unlockAudio();
+ if(masterGain&&audioContext)masterGain.gain.setTargetAtTime(.18,audioContext.currentTime,.02);
+ updateSoundButton();
+ const welcome=document.getElementById('welcome-sound');if(welcome){welcome.textContent='Sound on ♪';welcome.setAttribute('aria-pressed','true')}
+ ready.then(ok=>{
+  if(ok&&soundsEnabled){lastUiCue=-Infinity;arcadeCue('start')}
+  document.querySelectorAll('[data-test-sound]').forEach(b=>b.textContent=ok?'Test sound ♪':'Tap to retry sound');
+ });
+}
 function tone(freq,at,duration,volume=.25,type='sine',endFreq){if(!soundsEnabled||!audioContext||audioContext.state!=='running')return;const start=audioContext.currentTime+at,o=audioContext.createOscillator(),g=audioContext.createGain();o.type=type;o.frequency.setValueAtTime(freq,start);if(endFreq)o.frequency.exponentialRampToValueAtTime(endFreq,start+duration);g.gain.setValueAtTime(.0001,start);g.gain.exponentialRampToValueAtTime(volume,start+.012);g.gain.exponentialRampToValueAtTime(.0001,start+duration);o.connect(g);g.connect(masterGain);o.start(start);o.stop(start+duration+.02)}
 // A quiet shared room gives the mallets and impacts a natural tail.
 let soundRoom;
@@ -51,7 +94,7 @@ function neonNote(freq,at=0,duration=.16,level=.25){
  });
 }
 function arcadeCue(kind){
- unlockAudio();if(!soundsEnabled||!audioContext||audioContext.state!=='running')return;
+ if(!soundsEnabled)return;if(!audioContext||audioContext.state!=='running'){resumeSound(()=>arcadeCue(kind));return}
  const now=audioContext.currentTime;if(now-lastUiCue<.035)return;lastUiCue=now;
  const patterns={
  tap:[784],add:[659,988,1319],remove:[660,440],up:[880,1175],down:[784,587],
@@ -69,7 +112,7 @@ document.addEventListener('click',event=>{
  if(!event.isTrusted)return;
  const button=event.target.closest('button');if(!button||button.disabled||button.getAttribute('aria-disabled')==='true')return;
  const id=button.id;
- if(['sound-toggle','welcome-sound','add-player'].includes(id))return;
+ if(['sound-toggle','welcome-sound','add-player'].includes(id)||button.hasAttribute('data-test-sound'))return;
  let cue='tap';
  if(button.hasAttribute('data-remove-player'))cue='remove';
  else if(button.hasAttribute('data-seat'))cue='seat';
@@ -91,7 +134,7 @@ document.addEventListener('keydown',event=>{
  if(event.target.id==='table-bet'&&['ArrowUp','ArrowDown'].includes(event.key))arcadeCue(event.key==='ArrowUp'?'up':'down');
 });
 function sound(kind){
- unlockAudio();if(!soundsEnabled||!audioContext||audioContext.state!=='running')return;
+ if(!soundsEnabled)return;if(!audioContext||audioContext.state!=='running'){resumeSound(()=>sound(kind));return}
  if(kind==='win'||kind==='full'){
  const full=kind==='full';
  brushedImpact(0,.12,.12,1900);
@@ -107,7 +150,9 @@ function sound(kind){
  }else if(kind==='ante'){[440,660,880].forEach((f,i)=>mallet(f,i*.055,.25,.12))}
  else{arcadeCue(kind==='tap'?'tap':kind==='pass'?'pass':'choose')}
 }
-document.addEventListener('pointerdown',unlockAudio,{passive:true});document.addEventListener('keydown',unlockAudio);
+for(const event of ['pointerdown','touchend','click','keydown'])document.addEventListener(event,unlockAudio,{passive:true,capture:true});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&audioContext&&soundsEnabled)unlockAudio()});
+window.addEventListener('pageshow',()=>{if(audioContext&&soundsEnabled)unlockAudio()});
 document.getElementById('sound-toggle').onclick=()=>{soundsEnabled=!soundsEnabled;try{localStorage.setItem('inbetween-sound',soundsEnabled?'on':'off')}catch{}if(masterGain&&audioContext)masterGain.gain.setTargetAtTime(soundsEnabled?.18:0,audioContext.currentTime,.02);updateSoundButton();if(soundsEnabled)arcadeCue('toggle')};
 document.getElementById('direction').onclick=()=>{if(!state||state.ended)return;state.direction*=-1;save();render();$('seating-status').textContent='Direction changed. '+state.players[state.turn]+' keeps the current turn.'};
 function moveSeat(player,target){const from=state.seatOrder.indexOf(player);if(from===target)return;state.seatOrder.splice(from,1);state.seatOrder.splice(target,0,player);save();render();arcadeCue('seat');$('seating-status').textContent=state.players[player]+' moved to seat '+(target+1)+'. Turn order now follows the new seating.'}
@@ -168,3 +213,5 @@ document.addEventListener('keydown',event=>{
 document.addEventListener('focusin',event=>{
  if(!tableMenuActions.hidden&&!tableMenuActions.contains(event.target)&&!tableMenuToggle.contains(event.target))closeTableMenu();
 });
+
+document.querySelectorAll('[data-test-sound]').forEach(button=>button.onclick=testTableSound);

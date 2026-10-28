@@ -66,7 +66,7 @@ function cardFriction(at,duration,level,cutoff,texture='slide'){
  source.start(audioContext.currentTime+at);source.stop(audioContext.currentTime+at+duration+.01);
 }
 function cardNoise(kind){
- unlockAudio();if(!soundsEnabled||!audioContext||audioContext.state!=='running')return;
+ if(!soundsEnabled)return;if(!audioContext||audioContext.state!=='running'){resumeSound(()=>cardNoise(kind));return}
  if(kind==='shuffle'){
   stopCardFoley();cardFriction(0,.24,1.2,2800);
   // Two packets riffle unevenly, bridge together, then square against the felt.
