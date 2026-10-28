@@ -67,19 +67,24 @@ function cardFriction(at,duration,level,cutoff,texture='slide'){
 }
 function cardNoise(kind){
  if(!soundsEnabled)return;if(!audioContext||audioContext.state!=='running'){resumeSound(()=>cardNoise(kind));return}
+ // Cancel previous card textures: no overlapping tails or repeated landing echoes.
+ stopCardFoley();
  if(kind==='shuffle'){
-  stopCardFoley();cardFriction(0,.24,1.2,2800);
-  // Two packets riffle unevenly, bridge together, then square against the felt.
-  let t=.24;for(let i=0;i<32;i++){cardFriction(t,.018+Math.random()*.025,.65+Math.random()*.6,2600+Math.random()*2300,'snap');t+=.012+Math.random()*.014}
-  cardFriction(.90,.40,1.0,2200);
-  for(let i=0;i<13;i++)cardFriction(1.04+i*.025,.027,.65,3100,'snap');
-  cardFriction(1.47,.08,1.1,850,'snap');cardFriction(1.61,.065,.8,1100,'snap');
+  cardFriction(0,.13,.8,2200);
+  let t=.20;
+  for(let i=0;i<27;i++){
+   const interval=.022+Math.random()*.014;
+   cardFriction(t,interval*.75,.7+Math.random()*.35,2200+Math.random()*1600,'snap');
+   t+=interval;
+  }
+  cardFriction(1.16,.12,.75,1600);
+  cardFriction(1.42,.035,.65,800,'snap');
  }else if(kind==='travel'){
-  cardFriction(0,.36,.85,1900);cardFriction(.12,.38,.65,2300);
-  cardFriction(.68,.055,.8,800,'snap');cardFriction(.78,.055,.7,950,'snap');
+  cardFriction(.08,.16,.65,1700);
  }else{
-  const pair=kind==='pair';
-  for(let i=0;i<(pair?2:1);i++){const at=i*.14;cardFriction(at,.16,.7,2800);cardFriction(at+.32,.035,.65,3900,'snap');cardFriction(at+.64,.05,.75,950,'snap')}
+  // One close, dry flick per card. No delayed taps, reverb, or synth overlay.
+  const count=kind==='pair'?2:1;
+  for(let i=0;i<count;i++)cardFriction(.18+i*.14,.075,.9,2600,'slide');
  }
 }
 function animateSeatToCenter(){

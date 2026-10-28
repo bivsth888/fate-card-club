@@ -112,7 +112,7 @@ document.addEventListener('click',event=>{
  if(!event.isTrusted)return;
  const button=event.target.closest('button');if(!button||button.disabled||button.getAttribute('aria-disabled')==='true')return;
  const id=button.id;
- if(['sound-toggle','welcome-sound','add-player'].includes(id)||button.hasAttribute('data-test-sound'))return;
+ if(['sound-toggle','welcome-sound','add-player','digital-primary'].includes(id)||button.hasAttribute('data-test-sound'))return;
  let cue='tap';
  if(button.hasAttribute('data-remove-player'))cue='remove';
  else if(button.hasAttribute('data-seat'))cue='seat';

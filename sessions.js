@@ -25,6 +25,11 @@ function resumeSession(id){if(!sessionLibrary[id])return;state=JSON.parse(JSON.s
 function openNewGame(){if(state)save();screenMode='setup';draftPlayers=[];$('session-name').value='';$('player-name').value='';$('player-error').textContent='';render();$('player-name').focus()}
 function openMenu(){if(state)save();clearCelebration();screenMode='welcome';render();window.scrollTo({top:0,behavior:'instant'})}
 function renderPlayerChips(){
+ const starter=$('starting-player'),selected=starter.value;
+ starter.innerHTML=draftPlayers.length?draftPlayers.map(name=>'<option value="'+esc(name)+'">'+esc(name)+'</option>').join(''):'<option value="">Add players first</option>';
+ starter.disabled=!draftPlayers.length;
+ if(draftPlayers.includes(selected))starter.value=selected;
+
  $('player-chips').innerHTML=draftPlayers.map((name,i)=>`<span class="player-chip"><span class="chip-avatar">${esc(name.slice(0,1).toUpperCase())}</span><span>${esc(name)}</span><button type="button" data-remove-player="${i}" aria-label="Remove ${esc(name)}">×</button></span>`).join('');
  $('player-count').textContent=draftPlayers.length+' / 30 players added'+(draftPlayers.length<2?' · Add at least 2 to start.':' · Ready to play.');
  document.querySelectorAll('[data-remove-player]').forEach(b=>b.onclick=()=>{draftPlayers.splice(Number(b.dataset.removePlayer),1);$('player-error').textContent='';renderPlayerChips();$('player-name').focus()});
